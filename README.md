@@ -15,7 +15,7 @@ CLI for Tuya-based standing desks. Move up, down, go to presets, target exact he
 
 ```bash
 # Clone and install
-git clone https://github.com/apex-skyner/orro.git
+git clone https://github.com/yashiels/orro.git
 cd orro
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
