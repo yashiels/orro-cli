@@ -1,4 +1,15 @@
-# 🪑 orro — Control your standing desk from the terminal
+<p align="center">
+  <img src=".github/orro-logo.png" alt="Orro" width="280">
+</p>
+
+<h1 align="center">orro-cli</h1>
+<p align="center">Control your standing desk from the terminal.</p>
+
+<p align="center">
+  <a href="https://github.com/yashiels/orro-cli/actions/workflows/ci.yml"><img src="https://github.com/yashiels/orro-cli/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/yashiels/orro-cli/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.12%2B-blue.svg" alt="Python 3.12+"></a>
+</p>
 
 A modern Python CLI for [Orro](https://orro-brand.co.za/) and other Tuya-based standing desks. Move up, down, recall presets, target exact heights — all from the command line. Talks to the desk over your LAN first (sub-second response, no cloud roundtrip) and falls back to the Tuya Cloud API automatically.
 
@@ -18,7 +29,7 @@ A modern Python CLI for [Orro](https://orro-brand.co.za/) and other Tuya-based s
 
 ```bash
 # install
-git clone https://github.com/yashiels/orro.git
+git clone https://github.com/yashiels/orro-cli.git
 cd orro
 pip install .
 
@@ -187,7 +198,7 @@ Override with `ORRO_LAN_DP_MAP` env var or `lan_dps` in the config file if your 
 ## Development
 
 ```bash
-git clone https://github.com/yashiels/orro.git
+git clone https://github.com/yashiels/orro-cli.git
 cd orro
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
