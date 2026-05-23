@@ -23,6 +23,13 @@ classifiers = [
 dependencies = [
     "tinytuya>=1.18.0",
     "requests>=2.28.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.12",
+    "pytest>=8.0",
 ]
 
 [project.scripts]
@@ -30,3 +37,10 @@ orro = "orro.cli:main"
 
 [project.urls]
 Repository = "https://github.com/apex-skyner/orro"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]

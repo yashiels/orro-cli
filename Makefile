@@ -1,0 +1,19 @@
+.PHONY: install lint fmt test clean
+
+install:
+	pip install -e .
+
+install-dev:
+	pip install -e ".[dev]"
+
+lint:
+	ruff check orro/
+
+fmt:
+	ruff format orro/
+
+test:
+	python -m pytest tests/ -v
+
+clean:
+	rm -rf build/ dist/ *.egg-info .ruff_cache/

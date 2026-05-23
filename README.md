@@ -1,153 +1,184 @@
-# Orro
+# 🪑 orro — Control your standing desk from the terminal
 
-CLI for Tuya-based standing desks. Control your desk from the terminal — move up, down, go to presets, set a specific height, or check status. Talks to the desk over LAN first (fast, no cloud roundtrip) and falls back to the Tuya Cloud API automatically.
+CLI for Tuya-based standing desks. Move up, down, go to presets, target exact heights — all from the command line. Connects over your LAN first (fast, no cloud roundtrip) and falls back to the Tuya Cloud API automatically.
 
 ## Features
 
-- **LAN-first control** via [TinyTuya](https://github.com/jasonacox/tinytuya) — sub-second response
-- **Cloud fallback** via the Tuya IoT Platform API when LAN isn't available
-- **Preset commands** — `orro sit` / `orro stand` mapped to device memory slots
-- **Height targeting** — `orro height 110` moves to 110 cm and stops
-- **Status reporting** — current height, connection path, device state
-- **Flexible credentials** — 1Password CLI or plain environment variables
+- **LAN-first control** via TinyTuya with automatic Cloud API fallback
+- **Preset memory slots** — sit/stand aliases mapped to device memory positions (mem1–mem4)
+- **Exact height targeting** — move to a specific height in cm with automatic stop
+- **Multiple config sources** — YAML file, environment variables, 1Password CLI
+- **Machine-readable output** — `--output json` for scripting, `--output table` for humans
+- **Zero cloud dependency for control** — LAN mode works without internet
 
-## Requirements
-
-- Python 3.12+
-- A Tuya-based standing desk (category `sjz` — tested with Orro, should work with other Tuya smart desks)
-- A [Tuya IoT Platform](https://iot.tuya.com/) account with a Cloud project linked to your device
-- Either the [1Password CLI](https://developer.1password.com/docs/cli/) (`op`) **or** environment variables for credentials
-
-## Installation
+## Quickstart
 
 ```bash
 # Clone and install
 git clone https://github.com/apex-skyner/orro.git
 cd orro
-pip install .
+python -m venv .venv && source .venv/bin/activate
+pip install -e .
 
-# Or with pipx for isolated install
-pipx install .
+# Set up config (interactive)
+orro config init
+
+# Or set values directly
+orro config set --endpoint https://openapi.tuyaeu.com \
+    --access-id YOUR_ID --access-secret YOUR_SECRET \
+    --device-id YOUR_DEVICE --local-key YOUR_KEY \
+    --lan-ip 192.168.10.95
+
+# Check desk status
+orro status
+
+# Move to standing position
+orro stand
 ```
 
-You can also run without installing:
+## Command Surface
 
-```bash
-python -m orro status
-```
+| Command | Description |
+|---------|-------------|
+| `orro status` | Show desk status (height, connection path, protocol version) |
+| `orro up` | Move desk up (hold until stop) |
+| `orro down` | Move desk down (hold until stop) |
+| `orro stop` | Stop desk movement |
+| `orro sit` | Move to configured sit preset |
+| `orro stand` | Move to configured stand preset |
+| `orro goto mem1` | Move to a specific memory preset (mem1–mem4) |
+| `orro height 75.0` | Move to a specific height in cm |
+| `orro presets` | Show preset configuration and device memory slots |
+| `orro config show` | Print current config (secrets redacted) |
+| `orro config path` | Print config file location |
+| `orro config set` | Set config values |
+| `orro config init` | Interactive config setup |
+
+### Global Flags
+
+| Flag | Description |
+|------|-------------|
+| `--output table\|json` | Output format (default: `table`) |
+| `--cloud` | Force Cloud API (skip LAN) |
+| `--verbose` / `-v` | Print debug info (connection attempts, API calls) |
+| `--quiet` / `-q` | Suppress info banners, output data only |
+| `--config PATH` | Path to config file |
+| `--version` | Print version and exit |
 
 ## Configuration
 
-Orro needs your Tuya IoT Platform credentials. You can provide them via environment variables or 1Password.
+orro reads configuration from multiple sources with this precedence (highest first):
 
-### Option A: Environment Variables
+1. **CLI flags** — `--cloud`, `--config`, etc.
+2. **Environment variables** — `ORRO_ENDPOINT`, `ORRO_ACCESS_ID`, etc.
+3. **Config file** — `~/.config/orro/config.yaml` (or `ORRO_CONFIG` / `--config`)
+4. **1Password CLI** — vault `OpenClaw`, item `Tuya IoT Platform`
+5. **Built-in defaults** — preset mappings, LAN DP IDs
 
-```bash
-export ORRO_ENDPOINT="https://openapi.tuyaeu.com"   # Your Tuya API endpoint
-export ORRO_ACCESS_ID="your_access_id"
-export ORRO_ACCESS_SECRET="your_access_secret"
-export ORRO_DEVICE_ID="your_device_id"
+### Config File
 
-# Optional — enables LAN control (recommended)
-export ORRO_LOCAL_KEY="your_local_key"
-export ORRO_LAN_IP="192.168.1.100"        # Skip LAN discovery
-export ORRO_LAN_VERSION="3.4"             # Tuya protocol version
+Location: `~/.config/orro/config.yaml` (created with `0600` permissions)
+
+```yaml
+endpoint: https://openapi.tuyaeu.com
+access_id: your_access_id
+access_secret: your_access_secret
+device_id: your_device_id
+local_key: your_local_key
+lan_ip: 192.168.10.95
+lan_version: "3.4"
+
+presets:
+  sit: mem1
+  stand: mem3
 ```
 
-### Option B: 1Password CLI
+### Environment Variables
 
-If you have the [1Password CLI](https://developer.1password.com/docs/cli/) installed, Orro reads credentials from:
+| Variable | Description |
+|----------|-------------|
+| `ORRO_ENDPOINT` | Tuya API endpoint URL |
+| `ORRO_ACCESS_ID` | Tuya IoT Platform Access ID |
+| `ORRO_ACCESS_SECRET` | Tuya IoT Platform Access Secret |
+| `ORRO_DEVICE_ID` | Tuya device ID |
+| `ORRO_LOCAL_KEY` | Device local encryption key |
+| `ORRO_LAN_IP` | Device LAN IP (skips discovery) |
+| `ORRO_LAN_VERSION` | Tuya LAN protocol version (e.g. `3.4`) |
+| `ORRO_LAN_DP_MAP` | JSON override for LAN DP IDs |
+| `ORRO_PRESETS` | JSON override for preset mappings |
+| `ORRO_CONFIG` | Path to config file |
 
-- **Vault:** `OpenClaw`
-- **Item:** `Tuya IoT Platform`
-- **Fields:** `API Endpoint`, `Access ID`, `Access Secret`, `Device ID`, `Local Key`, `LAN IP`, `LAN Version`
+### 1Password CLI
 
-Create the item:
+If the `op` CLI is available, orro reads credentials from vault `OpenClaw`, item `Tuya IoT Platform`:
 
-```bash
-op item create \
-  --vault "OpenClaw" \
-  --title "Tuya IoT Platform" \
-  --category login \
-  "API Endpoint=https://openapi.tuyaeu.com" \
-  "Access ID=your_access_id" \
-  "Access Secret=your_access_secret" \
-  "Device ID=your_device_id" \
-  "Local Key=your_local_key"
-```
-
-Environment variables take priority over 1Password when both are set.
-
-### Optional Configuration
-
-Override LAN DP mappings or preset names with JSON:
-
-```bash
-# Custom DP map (if your desk uses different DP IDs)
-export ORRO_LAN_DP_MAP='{"child_lock":1,"move_up":18,"move_down":19,"height_display":20,"memory_location":22}'
-
-# Custom presets
-export ORRO_PRESETS='{"sit":"mem1","stand":"mem2"}'
-```
-
-## Usage
-
-```bash
-orro status          # Current desk state (height, connection path)
-orro status --json   # Machine-readable JSON output
-orro up              # Move up (hold until stop)
-orro down            # Move down (hold until stop)
-orro stop            # Stop movement
-orro sit             # Go to sit preset (default: mem1)
-orro stand           # Go to stand preset (default: mem3)
-orro height 110      # Move to 110 cm and stop
-orro presets         # Show configured and device preset heights
-orro --cloud status  # Force Tuya Cloud API (skip LAN)
-```
-
-Every command accepts `--json` for structured output and `--cloud` to bypass LAN.
+| Field | Maps to |
+|-------|---------|
+| `API Endpoint` | endpoint |
+| `Access ID` | access_id |
+| `Access Secret` | access_secret |
+| `Device ID` | device_id |
+| `Local Key` | local_key |
+| `LAN IP` | lan_ip |
+| `LAN Version` | lan_version |
+| `LAN DP Map` | lan_dps (JSON) |
+| `Presets` | presets (JSON) |
 
 ## LAN vs Cloud
 
-By default, Orro tries **LAN first** using TinyTuya:
+orro tries **LAN first** via TinyTuya, then falls back to the **Tuya Cloud API** if the device is unreachable locally. LAN control is faster (~50ms vs ~500ms) and works without internet.
 
-1. Connects to the desk directly on your local network
-2. If LAN fails (no local key, device offline, firewall), falls back to the Tuya Cloud API
-3. Use `--cloud` to skip LAN entirely
+LAN mode requires:
+- `local_key` — the device encryption key (from Tuya IoT Platform)
+- `lan_ip` (optional) — set explicitly or let orro discover it via UDP broadcast
+- `lan_version` (optional) — protocol version, auto-detected during connection
 
-LAN is faster (~100ms vs ~500ms) and doesn't depend on Tuya's servers. For LAN to work you need the device's `Local Key` — get it from the Tuya IoT Platform or by running the discovery script.
-
-## Discovery
-
-The `scripts/discover_tuya.py` script queries Tuya Cloud for your device's full DP (data point) map. This is useful for finding DP IDs if your desk uses different mappings than the defaults.
-
-```bash
-cd orro
-python scripts/discover_tuya.py
-```
-
-This writes `dp-discovery.json` with the complete device specification. The file is gitignored because it contains device secrets. See `dp-discovery.example.json` for the expected structure.
+Use `--cloud` to skip LAN and go straight to the Cloud API.
 
 ## Supported Desks
 
-Tested with the **Orro** standing desk (Tuya category `sjz`). Should work with any Tuya-connected standing desk that uses the standard DP codes:
+orro works with Tuya-based standing desks in the `sjz` (adjustable table) category. Tested with:
 
-- `move_up` / `move_down` — boolean movement controls
-- `height_display` — current height in mm
-- `memory_location` — preset slot selector (`mem1`–`mem4`)
-- `child_lock` — safety lock (toggled off before movement)
+- **Orro standing desk** (South Africa)
 
-If your desk uses different DP IDs, override them with `ORRO_LAN_DP_MAP` or the 1Password `LAN DP Map` field.
+Other Tuya `sjz` desks should work — the protocol and DP codes are standard. If your desk uses different DP IDs, override them via `ORRO_LAN_DP_MAP` or the config file `lan_dps` key.
 
 ## Getting Tuya Credentials
 
-1. Create an account on the [Tuya IoT Platform](https://iot.tuya.com/)
-2. Create a Cloud Project (choose your data centre region)
-3. Link your Smart Life / Tuya Smart app account under **Devices → Link Tuya App Account**
-4. Find your device in the device list — note the **Device ID**
-5. Your project page shows the **Access ID** and **Access Secret**
-6. The **API Endpoint** depends on your region (e.g. `https://openapi.tuyaeu.com` for Europe)
-7. The **Local Key** appears in the device details
+1. Download the **Tuya Smart** or **Smart Life** app and add your desk
+2. Create an account on the [Tuya IoT Platform](https://platform.tuya.com/)
+3. Create a **Cloud Development** project (choose your data centre region)
+4. Link your Smart Life app account under **Devices → Link Tuya App Account**
+5. Note your **Access ID** and **Access Secret** from the project overview
+6. Find your **Device ID** in the device list
+7. The **API Endpoint** depends on your region (e.g. `https://openapi.tuyaeu.com` for Europe)
+8. The **Local Key** appears in the device details
+
+## Discovery
+
+The included `scripts/discover_tuya.py` queries multiple Tuya Cloud API endpoints for your device and writes a full DP map to `dp-discovery.json`:
+
+```bash
+python scripts/discover_tuya.py
+```
+
+This is useful for identifying DP codes if your desk model uses different IDs than the defaults.
+
+## Known API Realities
+
+- **LAN protocol version varies** — orro tries 3.5, 3.4, 3.3, 3.1 in order. Set `lan_version` to skip the scan.
+- **LAN discovery uses UDP broadcast** — may not work across VLANs. Set `lan_ip` explicitly if discovery fails.
+- **Cloud API rate limits** — Tuya enforces rate limits on the IoT Platform API. LAN mode avoids this entirely.
+- **Height polling** — the `height` command polls status every 500ms for up to 30 seconds. The desk stops within ~5mm of the target.
+- **Memory preset DPs** — `memory_location` sends a preset name (e.g. `"mem1"`), not a height value. The desk handles the movement internally.
+- **Status DPs are read-only on LAN** — movement and preset commands use different DPs than what `status` returns.
+
+## Prior Work / References
+
+- [TinyTuya](https://github.com/jasonacox/tinytuya) — Python library for local Tuya device control
+- [Tuya IoT Platform](https://platform.tuya.com/) — official Cloud API
+- [tuyaopen](https://github.com/tuya/tuyaopen) — Tuya open SDK
+- [steipete/eightctl](https://github.com/steipete/eightctl) — CLI patterns inspiration
 
 ## License
 
