@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+"""Tuya Cloud DP discovery script.
+
+Queries multiple Tuya API endpoints for a device and writes the full
+response set, normalised DP map, and shadow properties to
+``dp-discovery.json`` in the current directory.
+
+Credentials are read from 1Password (vault ``OpenClaw``, item
+``Tuya IoT Platform``).  Requires the ``op`` CLI and the ``requests``
+package.
+"""
+
 import hashlib
 import hmac
 import json

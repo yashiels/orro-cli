@@ -1,4 +1,6 @@
-#!/Users/apex/Developer/orro-desk/.venv/bin/python
+#!/usr/bin/env python3
+"""Control a Tuya-based standing desk from the command line."""
+
 import argparse
 import base64
 import contextlib
@@ -6,6 +8,7 @@ import hashlib
 import hmac
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -34,7 +37,24 @@ DEFAULT_LAN_DPS = {
 }
 
 
+def _op_available() -> bool:
+    """Return True if the 1Password CLI (``op``) is on PATH."""
+    return shutil.which("op") is not None
+
+
 def op_read(item: str, field: str, required: bool = True) -> str | None:
+    """Read a field from the 1Password vault.
+
+    Returns ``None`` instead of raising when *required* is ``False`` and the
+    field cannot be read (or ``op`` is not installed).
+    """
+    if not _op_available():
+        if required:
+            raise RuntimeError(
+                f"1Password CLI (op) not found and no environment variable fallback "
+                f"for {item}/{field}"
+            )
+        return None
     ref = f"op://{VAULT}/{item}/{field}"
     result = subprocess.run(
         ["op", "read", ref],
@@ -65,6 +85,14 @@ def canonical_query(params: dict[str, Any] | None) -> str:
     return urlencode(pairs)
 
 
+def _env_or_op(env_key: str, item: str, field: str, required: bool = True) -> str | None:
+    """Try environment variable first, then 1Password, then error or None."""
+    value = os.environ.get(env_key)
+    if value:
+        return value
+    return op_read(item, field, required=required)
+
+
 @dataclass
 class Config:
     endpoint: str
@@ -79,6 +107,22 @@ class Config:
 
     @classmethod
     def load(cls) -> "Config":
+        """Load configuration from environment variables or 1Password.
+
+        Environment variables (checked first):
+            ORRO_ENDPOINT       — Tuya API endpoint URL
+            ORRO_ACCESS_ID      — Tuya IoT Platform Access ID
+            ORRO_ACCESS_SECRET  — Tuya IoT Platform Access Secret
+            ORRO_DEVICE_ID      — Tuya device ID
+            ORRO_LOCAL_KEY      — device local encryption key (optional)
+            ORRO_LAN_IP         — device LAN IP address (optional, skips discovery)
+            ORRO_LAN_VERSION    — Tuya LAN protocol version (optional, e.g. "3.4")
+            ORRO_LAN_DP_MAP     — JSON object overriding LAN DP IDs (optional)
+            ORRO_PRESETS        — JSON object overriding preset mapping (optional)
+
+        Falls back to 1Password vault ``OpenClaw``, item ``Tuya IoT Platform``
+        when environment variables are not set and ``op`` is available.
+        """
         lan_dps = dict(DEFAULT_LAN_DPS)
         raw_map = os.environ.get("ORRO_LAN_DP_MAP") or op_read(TUYA_ITEM, "LAN DP Map", required=False)
         if raw_map:
@@ -89,12 +133,33 @@ class Config:
         if raw_presets:
             presets.update({key: str(value) for key, value in json.loads(raw_presets).items()})
 
+        endpoint = _env_or_op("ORRO_ENDPOINT", TUYA_ITEM, "API Endpoint")
+        access_id = _env_or_op("ORRO_ACCESS_ID", TUYA_ITEM, "Access ID")
+        access_secret = _env_or_op("ORRO_ACCESS_SECRET", TUYA_ITEM, "Access Secret")
+        device_id = _env_or_op("ORRO_DEVICE_ID", TUYA_ITEM, "Device ID")
+
+        if not all([endpoint, access_id, access_secret, device_id]):
+            missing = [
+                name
+                for name, val in [
+                    ("ORRO_ENDPOINT", endpoint),
+                    ("ORRO_ACCESS_ID", access_id),
+                    ("ORRO_ACCESS_SECRET", access_secret),
+                    ("ORRO_DEVICE_ID", device_id),
+                ]
+                if not val
+            ]
+            raise RuntimeError(
+                f"Missing required configuration: {', '.join(missing)}. "
+                "Set environment variables or install 1Password CLI (op)."
+            )
+
         return cls(
-            endpoint=op_read(TUYA_ITEM, "API Endpoint") or "",
-            access_id=op_read(TUYA_ITEM, "Access ID") or "",
-            access_secret=op_read(TUYA_ITEM, "Access Secret") or "",
-            device_id=op_read(TUYA_ITEM, "Device ID") or "",
-            local_key=op_read(TUYA_ITEM, "Local Key", required=False),
+            endpoint=endpoint or "",
+            access_id=access_id or "",
+            access_secret=access_secret or "",
+            device_id=device_id or "",
+            local_key=_env_or_op("ORRO_LOCAL_KEY", TUYA_ITEM, "Local Key", required=False),
             lan_ip=os.environ.get("ORRO_LAN_IP") or op_read(TUYA_ITEM, "LAN IP", required=False),
             lan_version=os.environ.get("ORRO_LAN_VERSION") or op_read(TUYA_ITEM, "LAN Version", required=False),
             lan_dps=lan_dps,
@@ -207,7 +272,10 @@ class TuyaCloud:
 class TuyaLan:
     def __init__(self, config: Config) -> None:
         if not config.local_key:
-            raise RuntimeError("No Local Key field found in 1Password")
+            raise RuntimeError(
+                "No local key configured. Set ORRO_LOCAL_KEY or add 'Local Key' "
+                "to the 1Password item."
+            )
         self.config = config
         self.ip = config.lan_ip or self._discover_ip()
         if not self.ip:
