@@ -15,5 +15,7 @@ fmt:
 test:
 	python -m pytest tests/ -v
 
+check: lint test
+
 clean:
 	rm -rf build/ dist/ *.egg-info .ruff_cache/

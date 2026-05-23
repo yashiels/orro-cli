@@ -45,3 +45,10 @@ Config file: `~/.config/orro/config.yaml`. Credentials in 1Password vault `OpenC
 - Do not remove `tinytuya` dependency
 - Keep 1Password as a config source
 - The `scripts/discover_tuya.py` is standalone (does not import from orro)
+
+## CI
+
+- `.github/workflows/ci.yml`: lint (ruff) + test (pytest) on push/PR
+- `.github/workflows/release.yml`: build + publish to PyPI on `v*` tags
+- Tests: `tests/test_config.py` (unit), `tests/test_cli.py` (smoke)
+- Run locally: `make lint && make test`
