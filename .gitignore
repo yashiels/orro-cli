@@ -1,5 +1,6 @@
 # Go build output
 /orro
+/orro-cli
 /orro.exe
 dist/
 
