@@ -1,15 +1,12 @@
-.venv/
-__pycache__/
-*.py[cod]
-*.egg-info/
+# Go build output
+/orro
+/orro.exe
 dist/
-build/
-.ruff_cache/
 
 # Local Tuya discovery output includes raw device responses and secrets.
 dp-discovery.json
 
-# Local environment and editor state.
+# Editor and OS state.
 .env
 .DS_Store
 .idea/
