@@ -2,7 +2,6 @@
 
 > A snappy Python CLI for Orro and other Tuya-based standing desks. Move up, down, hit a preset, or drive to an exact height — all without leaving your shell.
 
-![hero](docs/assets/hero.png)
 
 [![PyPI](https://img.shields.io/pypi/v/orro)](https://pypi.org/project/orro/)
 [![Python 3.12+](https://img.shields.io/pypi/pyversions/orro)](https://pypi.org/project/orro/)
