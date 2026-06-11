@@ -327,8 +327,6 @@ func applyFromFile(cfg *Config, path string) error {
 	return nil
 }
 
-var envMap = map[string]*func(*Config, string){} // populated in init
-
 // applyFromEnv reads ORRO_* environment variables.
 func applyFromEnv(cfg *Config) {
 	pairs := map[string]*string{

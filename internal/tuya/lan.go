@@ -324,10 +324,6 @@ func (l *LAN) readRaw() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (l *LAN) readPacketRaw() ([]byte, error) {
-	return l.readRaw()
-}
-
 func (l *LAN) statusPayload() []byte {
 	p := map[string]string{
 		"gwId":  l.cfg.DeviceID,

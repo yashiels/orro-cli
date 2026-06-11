@@ -2,6 +2,7 @@ package tuya
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -191,7 +192,7 @@ func (c *Cloud) request(
 		reqBody = bytes.NewReader(bodyBytes)
 	}
 
-	req, err := http.NewRequest(method, reqURL, reqBody)
+	req, err := http.NewRequestWithContext(context.Background(), method, reqURL, reqBody)
 	if err != nil {
 		return nil, err
 	}

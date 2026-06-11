@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
 	"github.com/yashiels/orro-cli/internal/config"
 	"github.com/yashiels/orro-cli/internal/output"
 )
