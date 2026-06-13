@@ -252,6 +252,9 @@ func parsePacket(data, key []byte, isV34 bool) (*Packet, error) {
 	if isV34 {
 		// v3.4: header(16) + encrypted_payload + hmac(32) + footer(4)
 		// length = len(payload) + 32 + 4 = len(payload) + 36
+		// TODO(security): verify HMAC-SHA256 over header+payload before trusting response.
+		// The current implementation matches tinytuya's behavior (no response HMAC check),
+		// but ideally we should reject packets with invalid HMACs to prevent spoofed LAN responses.
 		if int(length) < 36 {
 			return nil, fmt.Errorf("v3.4 packet length too small: %d", length)
 		}
