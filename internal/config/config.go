@@ -22,8 +22,10 @@ import (
 const (
 	DefaultVault = "OpenClaw"
 	DefaultItem  = "Tuya IoT Platform"
-	Version      = "0.2.0"
 )
+
+// Version is the current orro version, overridden at build time via ldflags.
+var Version = "0.2.0"
 
 // DefaultLANDPs are the verified DP numbers for Orro standing desks.
 var DefaultLANDPs = map[string]int{

@@ -38,16 +38,22 @@ This auto-taps `yashiels/tap` and keeps `orro` updated with `brew upgrade`.
 Download from [Releases](https://github.com/yashiels/orro-cli/releases):
 
 ```bash
+# Replace VERSION with the release tag (e.g. 0.2.0)
+VERSION=0.2.0
+
 # macOS Apple Silicon
-curl -L https://github.com/yashiels/orro-cli/releases/latest/download/orro-darwin-arm64.tar.gz | tar xz
+curl -LO "https://github.com/yashiels/orro-cli/releases/download/v${VERSION}/orro_${VERSION}_darwin_arm64.tar.gz"
+tar xzf "orro_${VERSION}_darwin_arm64.tar.gz"
 sudo mv orro /usr/local/bin/
 
 # macOS Intel
-curl -L https://github.com/yashiels/orro-cli/releases/latest/download/orro-darwin-amd64.tar.gz | tar xz
+curl -LO "https://github.com/yashiels/orro-cli/releases/download/v${VERSION}/orro_${VERSION}_darwin_amd64.tar.gz"
+tar xzf "orro_${VERSION}_darwin_amd64.tar.gz"
 sudo mv orro /usr/local/bin/
 
 # Linux amd64
-curl -L https://github.com/yashiels/orro-cli/releases/latest/download/orro-linux-amd64.tar.gz | tar xz
+curl -LO "https://github.com/yashiels/orro-cli/releases/download/v${VERSION}/orro_${VERSION}_linux_amd64.tar.gz"
+tar xzf "orro_${VERSION}_linux_amd64.tar.gz"
 sudo mv orro /usr/local/bin/
 ```
 
