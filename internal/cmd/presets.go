@@ -18,11 +18,14 @@ func init() {
 }
 
 func runPresets(_ *cobra.Command, _ []string) error {
-	cfg := loadConfig(true)
+	cfg, err := loadConfig(true)
+	if err != nil {
+		return err
+	}
 	result, err := desk.GetPresets(cfg)
 	if err != nil {
-		die("%v", err)
+		return err
 	}
-	printAndExit(result)
+	printResult(result)
 	return nil
 }

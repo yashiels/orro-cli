@@ -151,6 +151,7 @@ type LoadOptions struct {
 	Verbose            bool
 	Quiet              bool
 	RequireCredentials bool
+	SkipOP             bool // Skip 1Password lookup (for testing).
 }
 
 // Load builds a Config by layering all sources.
@@ -164,8 +165,10 @@ func Load(opts LoadOptions) (*Config, error) {
 
 	// Layer 4: 1Password.
 	opVault, opItem := DefaultVault, DefaultItem
-	if err := applyFromOP(cfg, opVault, opItem); err != nil {
-		cfg.Debug(fmt.Sprintf("1Password unavailable: %v", err))
+	if !opts.SkipOP {
+		if err := applyFromOP(cfg, opVault, opItem); err != nil {
+			cfg.Debug(fmt.Sprintf("1Password unavailable: %v", err))
+		}
 	}
 
 	// Layer 3: config file.

@@ -2,7 +2,14 @@
 
 ## Unreleased
 
-(nothing yet)
+### Refactored
+- **Error handling**: all command handlers return errors via Cobra `RunE` instead of calling `os.Exit` — cleaner process lifecycle, testable, no panics
+- **Config `SkipOP` option**: `LoadOptions.SkipOP` skips 1Password lookup entirely, preventing 60–75s `op read` timeouts in CI and tests
+- **Config test speed**: tests run in ~2s (was ~75s) by using `SkipOP` instead of waiting for `op` CLI timeouts
+- **Output test coverage**: added `output_test.go` covering JSON, table, booleans, nil values, nested maps, slices (0% → 78.5%)
+- **Config test coverage**: added tests for env var presets, LAN DP map override, config file merge, and CLI flag overrides (59% → 64%)
+- **Removed redundant export wrapper**: `MovementCommands` was wrapping an unexported `movementCommands` — collapsed to a single exported function
+- **Updated AGENTS.md**: now documents Go project structure, build commands, and design decisions (was still describing the Python codebase)
 
 ## 0.2.0 — 2026-06-08
 

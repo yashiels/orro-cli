@@ -93,7 +93,7 @@ func runConfigShow(_ *cobra.Command, _ []string) error {
 		RequireCredentials: false,
 	})
 	if err != nil {
-		die("%v", err)
+		return err
 	}
 	output.Print(cfg.ToMap(true), outFormat())
 	return nil
@@ -132,12 +132,12 @@ func runConfigSet(_ *cobra.Command, _ []string) error {
 		values["lan_version"] = setLANVersion
 	}
 	if len(values) == 0 {
-		die("no values specified — use flags like --endpoint, --device-id, etc.")
+		return cmdError("no values specified — use flags like --endpoint, --device-id, etc.")
 	}
 
 	path, err := config.WriteConfigFile(values, flagConfig)
 	if err != nil {
-		die("write config: %v", err)
+		return fmt.Errorf("write config: %w", err)
 	}
 	fmt.Fprintf(os.Stderr, "wrote %s\n", path)
 	return nil
@@ -190,7 +190,7 @@ func interactiveConfigInit() error {
 
 	path, err := config.WriteConfigFile(values, flagConfig)
 	if err != nil {
-		die("write config: %v", err)
+		return fmt.Errorf("write config: %w", err)
 	}
 	fmt.Printf("config written to %s\n", path)
 	return nil

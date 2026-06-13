@@ -18,11 +18,14 @@ func init() {
 }
 
 func runStatus(_ *cobra.Command, _ []string) error {
-	cfg := loadConfig(true)
+	cfg, err := loadConfig(true)
+	if err != nil {
+		return err
+	}
 	result, err := desk.GetStatus(cfg, flagCloud)
 	if err != nil {
-		die("%v", err)
+		return err
 	}
-	printAndExit(result)
+	printResult(result)
 	return nil
 }

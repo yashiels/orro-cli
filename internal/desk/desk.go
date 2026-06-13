@@ -10,9 +10,9 @@ import (
 	"github.com/yashiels/orro-cli/internal/tuya"
 )
 
-// movementCommands builds the DP command list for a given action.
+// MovementCommands builds the DP command list for a given action.
 // target is only used for "goto"; for "sit"/"stand" the preset map is consulted.
-func movementCommands(action string, cfg *config.Config, target string) ([]tuya.Command, error) {
+func MovementCommands(action string, cfg *config.Config, target string) ([]tuya.Command, error) {
 	wake := tuya.Command{Code: "child_lock", Value: false}
 
 	switch action {
@@ -47,11 +47,6 @@ func movementCommands(action string, cfg *config.Config, target string) ([]tuya.
 	default:
 		return nil, fmt.Errorf("unknown movement action: %q", action)
 	}
-}
-
-// MovementCommands is exported for command handlers.
-func MovementCommands(action string, cfg *config.Config, target string) ([]tuya.Command, error) {
-	return movementCommands(action, cfg, target)
 }
 
 // ──────────────────────────────────────────────

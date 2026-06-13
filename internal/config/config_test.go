@@ -2,7 +2,6 @@ package config_test
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -58,6 +57,7 @@ func TestLoadEnvVars(t *testing.T) {
 	t.Setenv("ORRO_DEVICE_ID", "test_device")
 
 	cfg, err := config.Load(config.LoadOptions{
+		SkipOP:             true,
 		RequireCredentials: true,
 	})
 	if err != nil {
@@ -75,16 +75,6 @@ func TestLoadEnvVars(t *testing.T) {
 }
 
 func TestLoadMissingCredentials(t *testing.T) {
-	// Skip if 1Password CLI is on PATH and signed in — it would supply credentials,
-	// making the "missing" assertion unreliable on developer machines.
-	if _, err := exec.LookPath("op"); err == nil {
-		// Try a quick probe; if it succeeds, 1Password is active.
-		out, err2 := exec.Command("op", "whoami").Output()
-		if err2 == nil && len(out) > 0 {
-			t.Skip("1Password CLI is active; skipping missing-credentials test")
-		}
-	}
-
 	// Clear any env vars that might satisfy requirements.
 	for _, k := range []string{"ORRO_ENDPOINT", "ORRO_ACCESS_ID", "ORRO_ACCESS_SECRET", "ORRO_DEVICE_ID"} {
 		t.Setenv(k, "")
@@ -92,6 +82,7 @@ func TestLoadMissingCredentials(t *testing.T) {
 
 	_, err := config.Load(config.LoadOptions{
 		ConfigPath:         "/nonexistent/path/config.toml",
+		SkipOP:             true,
 		RequireCredentials: true,
 	})
 	if err == nil {
@@ -102,6 +93,51 @@ func TestLoadMissingCredentials(t *testing.T) {
 	}
 }
 
+func TestLoadEnvVarPresets(t *testing.T) {
+	t.Setenv("ORRO_ENDPOINT", "https://test.example.com")
+	t.Setenv("ORRO_ACCESS_ID", "test_id")
+	t.Setenv("ORRO_ACCESS_SECRET", "test_secret")
+	t.Setenv("ORRO_DEVICE_ID", "test_device")
+	t.Setenv("ORRO_PRESETS", `{"sit":"mem2","stand":"mem4"}`)
+
+	cfg, err := config.Load(config.LoadOptions{
+		SkipOP:             true,
+		RequireCredentials: true,
+	})
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Presets["sit"] != "mem2" {
+		t.Errorf("sit preset = %q, want mem2", cfg.Presets["sit"])
+	}
+	if cfg.Presets["stand"] != "mem4" {
+		t.Errorf("stand preset = %q, want mem4", cfg.Presets["stand"])
+	}
+}
+
+func TestLoadEnvVarLANDPMap(t *testing.T) {
+	t.Setenv("ORRO_ENDPOINT", "https://test.example.com")
+	t.Setenv("ORRO_ACCESS_ID", "test_id")
+	t.Setenv("ORRO_ACCESS_SECRET", "test_secret")
+	t.Setenv("ORRO_DEVICE_ID", "test_device")
+	t.Setenv("ORRO_LAN_DP_MAP", `{"custom_dp":99}`)
+
+	cfg, err := config.Load(config.LoadOptions{
+		SkipOP:             true,
+		RequireCredentials: true,
+	})
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.LANDPs["custom_dp"] != 99 {
+		t.Errorf("custom_dp = %d, want 99", cfg.LANDPs["custom_dp"])
+	}
+	// Default DPs should still be present.
+	if cfg.LANDPs["move_up"] != 150 {
+		t.Errorf("move_up should still be 150, got %d", cfg.LANDPs["move_up"])
+	}
+}
+
 func TestToMapRedact(t *testing.T) {
 	t.Setenv("ORRO_ENDPOINT", "https://test.example.com")
 	t.Setenv("ORRO_ACCESS_ID", "test_id")
@@ -109,7 +145,7 @@ func TestToMapRedact(t *testing.T) {
 	t.Setenv("ORRO_DEVICE_ID", "test_device")
 	t.Setenv("ORRO_LOCAL_KEY", "my_local_key")
 
-	cfg, err := config.Load(config.LoadOptions{RequireCredentials: true})
+	cfg, err := config.Load(config.LoadOptions{SkipOP: true, RequireCredentials: true})
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -132,7 +168,7 @@ func TestToMapNoRedact(t *testing.T) {
 	t.Setenv("ORRO_ACCESS_SECRET", "super_secret")
 	t.Setenv("ORRO_DEVICE_ID", "test_device")
 
-	cfg, err := config.Load(config.LoadOptions{RequireCredentials: true})
+	cfg, err := config.Load(config.LoadOptions{SkipOP: true, RequireCredentials: true})
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -173,6 +209,7 @@ func TestWriteAndReadConfigFile(t *testing.T) {
 	t.Setenv("ORRO_ACCESS_ID", "i")
 	cfg, err := config.Load(config.LoadOptions{
 		ConfigPath:         path,
+		SkipOP:             true,
 		RequireCredentials: false,
 	})
 	if err != nil {
@@ -183,5 +220,71 @@ func TestWriteAndReadConfigFile(t *testing.T) {
 	}
 	if cfg.DeviceID != "abc123" {
 		t.Errorf("DeviceID = %q", cfg.DeviceID)
+	}
+}
+
+func TestWriteConfigFileMerge(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+
+	// Write initial values.
+	_, err := config.WriteConfigFile(map[string]any{
+		"endpoint":  "https://openapi.example.com",
+		"device_id": "dev1",
+	}, path)
+	if err != nil {
+		t.Fatalf("initial WriteConfigFile error: %v", err)
+	}
+
+	// Merge new values — endpoint should be updated, device_id preserved.
+	_, err = config.WriteConfigFile(map[string]any{
+		"endpoint": "https://openapi.tuyaus.com",
+	}, path)
+	if err != nil {
+		t.Fatalf("merge WriteConfigFile error: %v", err)
+	}
+
+	// Load and verify merge.
+	t.Setenv("ORRO_ACCESS_SECRET", "s")
+	t.Setenv("ORRO_ACCESS_ID", "i")
+	cfg, err := config.Load(config.LoadOptions{
+		ConfigPath:         path,
+		SkipOP:             true,
+		RequireCredentials: false,
+	})
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Endpoint != "https://openapi.tuyaus.com" {
+		t.Errorf("Endpoint after merge = %q, want tuyaus", cfg.Endpoint)
+	}
+	if cfg.DeviceID != "dev1" {
+		t.Errorf("DeviceID should be preserved after merge, got %q", cfg.DeviceID)
+	}
+}
+
+func TestLoadOverrides(t *testing.T) {
+	t.Setenv("ORRO_ENDPOINT", "https://env.example.com")
+	t.Setenv("ORRO_ACCESS_ID", "env_id")
+	t.Setenv("ORRO_ACCESS_SECRET", "env_secret")
+	t.Setenv("ORRO_DEVICE_ID", "env_device")
+
+	cfg, err := config.Load(config.LoadOptions{
+		SkipOP:             true,
+		RequireCredentials: true,
+		Overrides: map[string]string{
+			"endpoint": "https://override.example.com",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	// Override should win over env.
+	if cfg.Endpoint != "https://override.example.com" {
+		t.Errorf("Endpoint = %q, want override", cfg.Endpoint)
+	}
+	// Non-overridden fields should come from env.
+	if cfg.AccessID != "env_id" {
+		t.Errorf("AccessID = %q, want env_id", cfg.AccessID)
 	}
 }

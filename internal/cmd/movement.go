@@ -55,31 +55,37 @@ func init() {
 
 func makeMovement(action string) func(*cobra.Command, []string) error {
 	return func(_ *cobra.Command, _ []string) error {
-		cfg := loadConfig(true)
+		cfg, err := loadConfig(true)
+		if err != nil {
+			return err
+		}
 		commands, err := desk.MovementCommands(action, cfg, "")
 		if err != nil {
-			die("%v", err)
+			return err
 		}
 		result, err := desk.LanThenCloud(cfg, commands, flagCloud)
 		if err != nil {
-			die("%v", err)
+			return err
 		}
-		printAndExit(result)
+		printResult(result)
 		return nil
 	}
 }
 
 func runGoto(_ *cobra.Command, args []string) error {
 	slot := args[0]
-	cfg := loadConfig(true)
+	cfg, err := loadConfig(true)
+	if err != nil {
+		return err
+	}
 	commands, err := desk.MovementCommands("goto", cfg, slot)
 	if err != nil {
-		die("%v", err)
+		return err
 	}
 	result, err := desk.LanThenCloud(cfg, commands, flagCloud)
 	if err != nil {
-		die("%v", err)
+		return err
 	}
-	printAndExit(result)
+	printResult(result)
 	return nil
 }

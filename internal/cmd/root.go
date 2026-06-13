@@ -3,7 +3,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -60,8 +59,8 @@ func outFormat() string {
 	return flagOutput
 }
 
-// loadConfig loads and validates configuration, exiting on fatal errors.
-func loadConfig(requireCreds bool) *config.Config {
+// loadConfig loads and validates configuration, returning an error on failure.
+func loadConfig(requireCreds bool) (*config.Config, error) {
 	cfg, err := config.Load(config.LoadOptions{
 		ConfigPath:         flagConfig,
 		Verbose:            flagVerbose,
@@ -69,20 +68,17 @@ func loadConfig(requireCreds bool) *config.Config {
 		RequireCredentials: requireCreds,
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "orro: %v\n", err)
-		os.Exit(3)
+		return nil, fmt.Errorf("%w", err)
 	}
-	return cfg
+	return cfg, nil
 }
 
-// printAndExit prints the payload in the configured format and exits 0.
-func printAndExit(payload any) {
+// printResult prints the payload in the configured format.
+func printResult(payload any) {
 	output.Print(payload, outFormat())
-	os.Exit(0)
 }
 
-// die prints an error to stderr and exits 1.
-func die(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "orro: "+format+"\n", args...)
-	os.Exit(1)
+// cmdError formats a user-facing error. Cobra prints it to stderr automatically.
+func cmdError(format string, args ...any) error {
+	return fmt.Errorf(format, args...)
 }
