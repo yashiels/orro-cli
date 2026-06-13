@@ -1,5 +1,7 @@
 # 🪑 orro — control your standing desk from the terminal
 
+![orro logo](.github/orro-logo.png)
+
 > A snappy Python CLI for Orro and other Tuya-based standing desks. Move up, down, hit a preset, or drive to an exact height — all without leaving your shell.
 
 
