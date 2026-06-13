@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/fatih/color"
+
 	"github.com/yashiels/orro-cli/internal/output"
 )
 
