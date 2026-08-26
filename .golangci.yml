@@ -1,25 +1,38 @@
+version: "2"
+
 linters:
+  default: none
   enable:
     - errcheck
-    - gosimple
     - govet
     - ineffassign
-    - staticcheck
+    - staticcheck # v2 folds the former gosimple checks into staticcheck
     - unused
-    - gofmt
-    - goimports
     - misspell
     - bodyclose
     - noctx
+  exclusions:
+    # Restore golangci-lint v1's default exclusions (unchecked defer Close /
+    # Print / Fprint on std streams), which v2 no longer applies by default.
+    presets:
+      - std-error-handling
+    rules:
+      # crypto/md5 is required by the Tuya v3.4 protocol — not a security issue.
+      - linters: [gosec]
+        text: "G501|G401"
+      - path: "_test\\.go"
+        linters: [errcheck, noctx]
+      # exec.Command shells out to the 1Password `op` CLI; net.DialTimeout is the
+      # synchronous Tuya LAN handshake dialer. Both are intentional and have no
+      # context to plumb — noctx still guards HTTP requests made without a context.
+      - linters: [noctx]
+        text: "(exec\\.Command|net\\.DialTimeout) must not be called"
 
-linters-settings:
-  goimports:
-    local-prefixes: github.com/yashiels/orro-cli
-
-issues:
-  exclude-rules:
-    # crypto/md5 is required by the Tuya v3.4 protocol — not a security issue.
-    - linters: [gosec]
-      text: "G501|G401"
-    - path: "_test\\.go"
-      linters: [errcheck]
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/yashiels/orro-cli
