@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-08-26
+
+### Fixed
+- **v3.4 LAN session-key handshake** (#16): LAN control now works instead of always resetting mid-negotiation and falling back to the Tuya Cloud. The `SESS_KEY_NEG` packets are now AES-ECB encrypted and HMAC-SHA256 framed under the local key (were CRC32 framed); the remote nonce is read from `payload[:16]` and the device HMAC in `payload[16:48]` is verified; the session key is derived as `AES-ECB(local_nonce XOR remote_nonce, key=local_key)`; and `SESS_KEY_NEG_FINISH` sends `HMAC-SHA256(remote_nonce, key=local_key)` framed with the local key. CONTROL commands are now prefixed with the `"3.4"` protocol header before encryption. Aligned with tinytuya's reference implementation.
 
 ### Refactored
 - **Error handling**: all command handlers return errors via Cobra `RunE` instead of calling `os.Exit` — cleaner process lifecycle, testable, no panics

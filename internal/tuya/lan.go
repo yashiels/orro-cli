@@ -188,74 +188,83 @@ func (l *LAN) candidateVersions() []string {
 }
 
 // negotiateSession performs the v3.4 session key exchange.
+//
+// Every negotiation packet is a full v3.4 frame — AES-128-ECB encrypted and
+// HMAC-SHA256 framed under the LOCAL key (not CRC32, and not the session key).
+// This mirrors tinytuya's XenonDevice._negotiate_session_key.
 func (l *LAN) negotiateSession() error {
-	// Step 1: generate a random 16-byte local nonce.
+	// Step 1: fresh random 16-byte local nonce.
 	localNonce := make([]byte, 16)
 	if _, err := rand.Read(localNonce); err != nil {
 		return err
 	}
 
-	// Step 2: encrypt local nonce with local key.
-	encNonce, err := AESECBEncrypt(localNonce, l.localKey)
-	if err != nil {
-		return fmt.Errorf("encrypt nonce: %w", err)
-	}
-
-	// Step 3: send SESS_KEY_NEG_START.
+	// Step 2: send SESS_KEY_NEG_START carrying the local nonce, framed with the
+	// local key (BuildPacketV34 encrypts the nonce and HMAC-frames it).
 	seq := atomic.AddUint32(&l.seq, 1)
-	pkt := BuildPreNegPacketV34(seq, CmdSessKeyStart, encNonce)
+	startPkt, err := BuildPacketV34(seq, CmdSessKeyStart, localNonce, l.localKey)
+	if err != nil {
+		return fmt.Errorf("build SESS_KEY_NEG_START: %w", err)
+	}
 	l.cfg.Debug("lan: sending SESS_KEY_NEG_START")
-	if _, err := l.conn.Write(pkt); err != nil {
+	if _, err := l.conn.Write(startPkt); err != nil {
 		return fmt.Errorf("write SESS_KEY_NEG_START: %w", err)
 	}
 
-	// Step 4: read SESS_KEY_NEG_RESP.
+	// Step 3: read and decrypt SESS_KEY_NEG_RESP with the local key.
 	raw, err := l.readRaw()
 	if err != nil {
 		return fmt.Errorf("read SESS_KEY_NEG_RESP: %w", err)
 	}
-	resp, err := ParsePreNegPacket(raw)
+	resp, err := ParsePacketV34(raw, l.localKey)
 	if err != nil {
 		return fmt.Errorf("parse SESS_KEY_NEG_RESP: %w", err)
 	}
 	if resp.Cmd != CmdSessKeyResp {
 		return fmt.Errorf("expected SESS_KEY_NEG_RESP (cmd=%d), got cmd=%d", CmdSessKeyResp, resp.Cmd)
 	}
-
-	// Step 5: decrypt device's remote nonce.
-	remoteNonce, err := AESECBDecrypt(resp.Payload, l.localKey)
-	if err != nil {
-		return fmt.Errorf("decrypt remote nonce: %w", err)
+	if len(resp.Payload) < 48 {
+		return fmt.Errorf("SESS_KEY_NEG_RESP payload too short: %d bytes", len(resp.Payload))
 	}
 
-	// Step 6: derive session key.
+	// Step 4: the payload is remote_nonce(16) || HMAC-SHA256(local_nonce, key=local_key)(32).
+	// Verify the HMAC to confirm the device holds the same local key.
+	remoteNonce := resp.Payload[:16]
+	wantHMAC := hmacSHA256(l.localKey, localNonce)
+	if !hmac.Equal(wantHMAC, resp.Payload[16:48]) {
+		return fmt.Errorf("SESS_KEY_NEG_RESP HMAC mismatch — wrong local key or protocol")
+	}
+
+	// Step 5: derive the session key = AES-ECB(local_nonce XOR remote_nonce, key=local_key).
 	sessionKey, err := DeriveSessionKey34(localNonce, remoteNonce, l.localKey)
 	if err != nil {
 		return fmt.Errorf("derive session key: %w", err)
 	}
-	l.sessionKey = sessionKey
-	l.cfg.Debug("lan: session key derived")
 
-	// Step 7: send SESS_KEY_NEG_FINISH — HMAC-SHA256(remoteNonce, key=sessionKey).
-	h := hmac.New(sha256.New, sessionKey)
-	h.Write(remoteNonce)
-	finPayload := h.Sum(nil)
-
+	// Step 6: send SESS_KEY_NEG_FINISH — payload HMAC-SHA256(remote_nonce, key=local_key),
+	// framed (encrypt + HMAC) with the LOCAL key. The session key is not active yet.
+	finPayload := hmacSHA256(l.localKey, remoteNonce)
 	seq2 := atomic.AddUint32(&l.seq, 1)
-	finPkt := wrapPacketHMAC(seq2, CmdSessKeyFin, finPayload, sessionKey)
+	finPkt, err := BuildPacketV34(seq2, CmdSessKeyFin, finPayload, l.localKey)
+	if err != nil {
+		return fmt.Errorf("build SESS_KEY_NEG_FINISH: %w", err)
+	}
 	l.cfg.Debug("lan: sending SESS_KEY_NEG_FINISH")
 	if _, err := l.conn.Write(finPkt); err != nil {
 		return fmt.Errorf("write SESS_KEY_NEG_FINISH: %w", err)
 	}
 
-	// Read acknowledgement (optional; some devices don't send one).
-	_ = l.conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-	buf := make([]byte, readBufSize)
-	n, _ := l.conn.Read(buf)
-	_ = l.conn.SetReadDeadline(time.Time{})
-	l.cfg.Debug(fmt.Sprintf("lan: SESS_KEY_NEG_FINISH ack: %d bytes", n))
-
+	// From here on every DATA packet is encrypted and HMAC-framed with the session key.
+	l.sessionKey = sessionKey
+	l.cfg.Debug("lan: session key negotiated")
 	return nil
+}
+
+// hmacSHA256 returns HMAC-SHA256(msg) keyed by key.
+func hmacSHA256(key, msg []byte) []byte {
+	h := hmac.New(sha256.New, key)
+	h.Write(msg)
+	return h.Sum(nil)
 }
 
 func (l *LAN) sendRecv(cmd uint32, payload []byte) (*Packet, error) {

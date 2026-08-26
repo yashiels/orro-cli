@@ -2,7 +2,7 @@
 
 BINARY  := orro
 MAIN    := ./cmd/orro
-VERSION := 0.2.0
+VERSION := 0.3.0
 LDFLAGS := -ldflags "-X github.com/yashiels/orro-cli/internal/config.Version=$(VERSION)"
 
 build:

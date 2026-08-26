@@ -84,21 +84,27 @@ func AESECBDecrypt(data, key []byte) ([]byte, error) {
 // remoteNonce is the plaintext 16-byte nonce received from the device.
 // localNonce is the 16-byte nonce we sent.
 //
-// Implementation mirrors tinytuya: the HMAC digest (first 16 bytes) is encrypted
-// as a single AES-128 block without PKCS7 padding, producing a 16-byte session key.
+// Mirrors tinytuya's _negotiate_session_key_generate_finalize: the session key
+// is AES-128-ECB(encrypt) of (localNonce XOR remoteNonce) under the local key,
+// with NO PKCS7 padding — a single 16-byte block.
 func DeriveSessionKey34(localNonce, remoteNonce, localKey []byte) ([]byte, error) {
-	// HMAC-SHA256(localNonce, key=remoteNonce), take first 16 bytes.
-	h := hmac.New(sha256.New, remoteNonce)
-	h.Write(localNonce)
-	digest := h.Sum(nil)[:16]
+	if len(localNonce) != 16 || len(remoteNonce) != 16 {
+		return nil, fmt.Errorf("nonces must be 16 bytes (local=%d remote=%d)", len(localNonce), len(remoteNonce))
+	}
 
-	// Single-block AES encryption (no PKCS7 padding — Python pycryptodome ECB behaviour).
-	encrypted, err := AESECBEncrypt(digest, localKey)
+	// Session material is the byte-wise XOR of the two nonces.
+	xored := make([]byte, 16)
+	for i := 0; i < 16; i++ {
+		xored[i] = localNonce[i] ^ remoteNonce[i]
+	}
+
+	// AES-128-ECB encrypt the 16-byte block under the local key, no padding.
+	// AESECBEncrypt PKCS7-pads to 32 bytes; ECB blocks are independent, so the
+	// first block is exactly the unpadded encryption of xored.
+	encrypted, err := AESECBEncrypt(xored, localKey)
 	if err != nil {
 		return nil, err
 	}
-	// AESECBEncrypt with PKCS7 pads 16 bytes → 32 bytes; take only the first block
-	// which is the actual AES encryption of the 16-byte digest (ECB blocks are independent).
 	return encrypted[:16], nil
 }
 
@@ -137,21 +143,37 @@ func BuildPacketV33(seq, cmd uint32, jsonData, localKey []byte) ([]byte, error) 
 	return wrapPacketCRC(seq, cmd, payload), nil
 }
 
-// BuildPacketV34 builds a complete v3.4 post-negotiation packet.
-// Payload is: AES-ECB-encrypt(jsonData, sessionKey).
-// HMAC is HMAC-SHA256 over the full packet (except HMAC+footer) with sessionKey.
-func BuildPacketV34(seq, cmd uint32, jsonData, sessionKey []byte) ([]byte, error) {
-	encrypted, err := AESECBEncrypt(jsonData, sessionKey)
+// v34HeaderlessCmds lists the commands that are NOT prefixed with the "3.4"
+// protocol header before encryption (see tinytuya's NO_PROTOCOL_HEADER_CMDS).
+// Everything else — notably CmdControl — gets the 15-byte header.
+var v34HeaderlessCmds = map[uint32]bool{
+	CmdSessKeyStart: true,
+	CmdSessKeyResp:  true,
+	CmdSessKeyFin:   true,
+	CmdHeartbeat:    true,
+	CmdDPQuery:      true,
+	CmdDPQueryNew:   true,
+}
+
+// BuildPacketV34 builds a complete v3.4 protocol packet.
+//
+// Every v3.4 packet — including the SESS_KEY_NEG negotiation packets — is
+// AES-128-ECB encrypted and HMAC-SHA256 framed under the same key: the local
+// key during negotiation, the session key afterwards. Commands not in
+// v34HeaderlessCmds (e.g. CmdControl) are prefixed with "3.4" + 12 null bytes
+// before encryption.
+func BuildPacketV34(seq, cmd uint32, jsonData, key []byte) ([]byte, error) {
+	payload := jsonData
+	if !v34HeaderlessCmds[cmd] {
+		hdr := make([]byte, 15) // "3.4" + 12 × 0x00
+		copy(hdr, "3.4")
+		payload = append(hdr, payload...)
+	}
+	encrypted, err := AESECBEncrypt(payload, key)
 	if err != nil {
 		return nil, err
 	}
-	return wrapPacketHMAC(seq, cmd, encrypted, sessionKey), nil
-}
-
-// BuildPreNegPacketV34 builds a v3.4 packet before session negotiation
-// (key exchange messages use CRC32, not HMAC).
-func BuildPreNegPacketV34(seq, cmd uint32, payload []byte) []byte {
-	return wrapPacketCRC(seq, cmd, payload)
+	return wrapPacketHMAC(seq, cmd, encrypted, key), nil
 }
 
 // wrapPacketCRC wraps payload with the standard Tuya header/footer and CRC32.
@@ -316,42 +338,18 @@ func parsePacket(data, key []byte, isV34 bool) (*Packet, error) {
 		}
 	}
 
+	// v3.4 CONTROL responses may carry the "3.4" + 12-null protocol header ahead
+	// of the plaintext; strip it so callers see the bare payload.
+	if isV34 && len(payload) >= 15 && string(payload[:3]) == "3.4" {
+		payload = payload[15:]
+	}
+
 	return &Packet{
 		Seq:     seq,
 		Cmd:     cmd,
 		RetCode: retCode,
 		Payload: payload,
 	}, nil
-}
-
-// ParsePreNegPacket parses a packet before session negotiation (CRC, no decrypt).
-func ParsePreNegPacket(data []byte) (*Packet, error) {
-	if len(data) < 20 {
-		return nil, fmt.Errorf("packet too short: %d bytes", len(data))
-	}
-
-	idx := bytes.Index(data, []byte{0x00, 0x00, 0x55, 0xAA})
-	if idx >= 0 {
-		data = data[idx:]
-	}
-
-	if len(data) < 20 {
-		return nil, fmt.Errorf("packet too short after sync")
-	}
-
-	seq := binary.BigEndian.Uint32(data[4:8])
-	cmd := binary.BigEndian.Uint32(data[8:12])
-	length := binary.BigEndian.Uint32(data[12:16])
-
-	var payload []byte
-	if int(length) >= 8 {
-		payloadLen := int(length) - 8
-		if 16+payloadLen <= len(data) && payloadLen > 0 {
-			payload = data[16 : 16+payloadLen]
-		}
-	}
-
-	return &Packet{Seq: seq, Cmd: cmd, Payload: payload}, nil
 }
 
 // ──────────────────────────────────────────────
