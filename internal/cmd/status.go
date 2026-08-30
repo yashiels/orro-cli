@@ -26,6 +26,11 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+
+	// Decode and label the desk height consistently for both LAN and cloud
+	// paths so the output is the same regardless of transport.
+	desk.AnnotateHeight(result, cfg)
+
 	printResult(result)
 	return nil
 }

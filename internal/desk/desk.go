@@ -161,6 +161,22 @@ func GetPresets(cfg *config.Config) (map[string]any, error) {
 	}, nil
 }
 
+// AnnotateHeight decodes the desk height from a GetStatus result and adds
+// labelled "height_mm" and "height_cm" fields, so that status output is the
+// same regardless of whether the LAN or cloud transport was used. It relies on
+// CurrentHeightMM for decoding and is a no-op when the height is unavailable.
+func AnnotateHeight(result map[string]any, cfg *config.Config) {
+	path, _ := result["path"].(string)
+	status, ok := result["status"].(map[string]any)
+	if !ok {
+		return
+	}
+	if mm, found := CurrentHeightMM(status, cfg, path); found {
+		result["height_mm"] = mm
+		result["height_cm"] = float64(mm) / 10
+	}
+}
+
 // CurrentHeightMM extracts the current height in mm from a status map.
 // path is "lan" or "cloud".
 func CurrentHeightMM(status map[string]any, cfg *config.Config, path string) (int, bool) {

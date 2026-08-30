@@ -112,6 +112,66 @@ func TestCurrentHeightMMFromLAN(t *testing.T) {
 	}
 }
 
+func TestAnnotateHeightCloud(t *testing.T) {
+	cfg := &config.Config{LANDPs: config.DefaultLANDPs}
+	result := map[string]any{
+		"path": "cloud",
+		"status": map[string]any{
+			"height_display": float64(1100),
+		},
+	}
+
+	desk.AnnotateHeight(result, cfg)
+
+	if result["height_mm"] != 1100 {
+		t.Errorf("height_mm = %v, want 1100", result["height_mm"])
+	}
+	if result["height_cm"] != float64(110) {
+		t.Errorf("height_cm = %v, want 110", result["height_cm"])
+	}
+}
+
+func TestAnnotateHeightLAN(t *testing.T) {
+	cfg := &config.Config{LANDPs: map[string]int{"height_display": 152}}
+	// LAN status DPs are keyed by string DP number, nested under "dps".
+	result := map[string]any{
+		"path": "lan",
+		"status": map[string]any{
+			"dps": map[string]any{
+				"152": float64(1100),
+			},
+		},
+	}
+
+	desk.AnnotateHeight(result, cfg)
+
+	if result["height_mm"] != 1100 {
+		t.Errorf("height_mm = %v, want 1100", result["height_mm"])
+	}
+	if result["height_cm"] != float64(110) {
+		t.Errorf("height_cm = %v, want 110", result["height_cm"])
+	}
+}
+
+func TestAnnotateHeightUnavailable(t *testing.T) {
+	cfg := &config.Config{LANDPs: config.DefaultLANDPs}
+	result := map[string]any{
+		"path": "cloud",
+		"status": map[string]any{
+			"child_lock": false,
+		},
+	}
+
+	desk.AnnotateHeight(result, cfg)
+
+	if _, ok := result["height_cm"]; ok {
+		t.Error("height_cm should not be set when height is unavailable")
+	}
+	if _, ok := result["height_mm"]; ok {
+		t.Error("height_mm should not be set when height is unavailable")
+	}
+}
+
 func TestCurrentHeightMMNotPresent(t *testing.T) {
 	cfg := &config.Config{LANDPs: config.DefaultLANDPs}
 	status := map[string]any{
