@@ -151,6 +151,7 @@ orro status --cloud
 
 ## Notes
 
+- macOS 15+ local-network privacy can silently deny terminal binaries (TCC): the signature is `no route to host` on every protocol version while `nc` to port 6668 succeeds and tcpdump shows zero packets leaving on a failing connect. That is not routing; fix it in System Settings > Privacy & Security > Local Network, or `tccutil reset LocalNetwork` to re-trigger the allow prompt. Verify with `orro status --verbose` reaching `path: lan`.
 - LAN-first: `orro` tries the native Tuya LAN protocol (TCP 6668) first, then falls back to the Tuya Cloud REST API automatically. `--cloud` skips the LAN attempt entirely. LAN requires `local_key` + `lan_version` (and `lan_ip`, or UDP discovery on 6666/6667).
 - Config format is TOML (not YAML).
 - Commands exit non-zero on error and print a human-readable message to stderr.
